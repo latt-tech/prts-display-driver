@@ -1,22 +1,24 @@
 ;
-; IddSampleDriver.inf
+; IddSampleDriver.inf - 合并版（显卡 + 监视器）
 ;
 
 [Version]
 PnpLockdown=1
 Signature="$Windows NT$"
-ClassGUID = {4D36E968-E325-11CE-BFC1-08002BE10318}
+ClassGUID = {4d36e968-e325-11ce-bfc1-08002be10318}
 Class = Display
 ClassVer = 2.0
 Provider=%ManufacturerName%
 CatalogFile=PvDisplay.cat
-DriverVer = 02/19/2026,13.16.27.979
+DriverVer = 02/21/2026,14.01.01.01
 
 [Manufacturer]
 %ManufacturerName%=Standard,NTamd64
 
+; =================== 设备定义 ==================
 [Standard.NTamd64]
-%DeviceName%=MyDevice_Install, Root\PvDisplay0 ; TODO: edit hw-id
+%DeviceName%=MyDevice_Install, Root\PvDisplay0  ; 显卡设备
+%MonitorName%=Monitor_Install, MONITOR\PRTS_VIRTUAL  ; 监视器设备
 
 [SourceDisksFiles]
 PvDisplay.dll=1
@@ -24,8 +26,37 @@ PvDisplay.dll=1
 [SourceDisksNames]
 1 = %DiskName%
 
-; =================== UMDF Device ==================================
+; =================== 监视器安装部分 ==================
+; 监视器设备不需要服务，所以使用 AddService 指令但指向 null service
+[Monitor_Install.NT]
+CopyFiles = MonitorCopyFiles
 
+[Monitor_Install.NT.Services]
+AddService = , 0x00000002  ; 2 = SPSVCINST_ASSOCSERVICE (空服务)
+
+[Monitor_Install.NT.HW]
+AddReg = Monitor_AddReg
+
+[Monitor_Install.NT.Interfaces]  ; 添加接口支持
+AddInterface = {e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}, MONITOR_Interface_Install
+
+[MONITOR_Interface_Install]
+AddReg = MONITOR_Interface_AddReg
+
+[MONITOR_Interface_AddReg]
+HKR,,"FriendlyName",,%MonitorName%
+
+[Monitor_AddReg]
+; 设置监视器的友好名称（这就是在设备管理器中显示的名称）
+HKR,, "FriendlyName", %REG_SZ%, %MonitorName%
+; 可选：添加EDID模拟
+HKR,, "EDID", %REG_BINARY%, 00,ff,ff,ff,ff,ff,ff,00,35,9b,01,01,01,01,01,01,01,15,01,03,01,01,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,00,01,01
+
+; 监视器文件复制（如果有ICM颜色配置文件）
+[MonitorCopyFiles]
+; PRTS_Virtual.icm
+
+; =================== UMDF 显卡设备 ==================
 [MyDevice_Install.NT]
 CopyFiles=UMDriverCopy
 
@@ -34,19 +65,19 @@ AddReg = MyDevice_HardwareDeviceSettings
 
 [MyDevice_HardwareDeviceSettings]
 HKR,, "UpperFilters",  %REG_MULTI_SZ%, "IndirectKmd"
-HKR, "WUDF", "DeviceGroupId", %REG_SZ%, "PvDisplayGroup" ; TODO: edit driver group name, see README.md for more info
+HKR, "WUDF", "DeviceGroupId", %REG_SZ%, "PvDisplayGroup"
 
 [MyDevice_Install.NT.Services]
-AddService=WUDFRd,0x000001fa,WUDFRD_ServiceInstall
+AddService = WUDFRd, 0x000001fa, WUDFRD_ServiceInstall
 
 [MyDevice_Install.NT.Wdf]
-UmdfService=IddSampleDriver,IddSampleDriver_Install
-UmdfServiceOrder=IddSampleDriver
+UmdfService = IddSampleDriver, IddSampleDriver_Install
+UmdfServiceOrder = IddSampleDriver
 UmdfKernelModeClientPolicy = AllowKernelModeClients
 
 [IddSampleDriver_Install]
-UmdfLibraryVersion=2.15.0 
-ServiceBinary=%12%\UMDF\PvDisplay.dll
+UmdfLibraryVersion = 2.15.0
+ServiceBinary = %12%\UMDF\PvDisplay.dll
 UmdfExtensions = IddCx0102
 
 [WUDFRD_ServiceInstall]
@@ -57,20 +88,25 @@ ErrorControl = 1
 ServiceBinary = %12%\WUDFRd.sys
 
 [DestinationDirs]
-UMDriverCopy=12,UMDF ; copy to drivers\umdf
+UMDriverCopy = 12, UMDF      ; 复制到 drivers\umdf
+MonitorCopyFiles = 23        ; 复制到颜色目录
+DefaultDestDir = 12
 
 [UMDriverCopy]
 PvDisplay.dll
 
-; =================== Generic ==================================
-
+; =================== 字符串定义 ==================
 [Strings]
-ManufacturerName="Rhodes Island"
+ManufacturerName = "Rhodes Island"
 DiskName = "Rhodes Island Installation Disk"
-WudfRdDisplayName="PRTS Display Adapter"
-DeviceName="PRTS Display Adapter"
+WudfRdDisplayName = "PRTS Display Adapter"
+DeviceName = "PRTS UHD Device"
+; 自定义监视器名称 - 在这里修改为你想要的名字
+MonitorName = "PRTS UHD Device"  ; ← 在这里更改虚拟显示器的显示名称
 
-REG_MULTI_SZ  = 0x00010000
+; 注册表值类型定义
 REG_SZ        = 0x00000000
-REG_EXPAND_SZ = 0x00020000
+REG_MULTI_SZ  = 0x00010000
 REG_DWORD     = 0x00010001
+REG_BINARY    = 0x00000003
+REG_EXPAND_SZ = 0x00020000
